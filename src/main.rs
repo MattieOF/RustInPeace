@@ -11,6 +11,7 @@ use prelude::*;
 #[macro_use]
 extern crate log;
 extern crate chrono;
+#[macro_use]
 extern crate glium;
 extern crate simplelog;
 
@@ -35,6 +36,12 @@ use std::{
     process::exit,
 };
 use time::UtcOffset;
+
+#[derive(Copy, Clone)]
+struct Vertex {
+    position: [f32; 2],
+}
+implement_vertex!(Vertex, position);
 
 fn main() {
     init_log();
@@ -76,6 +83,32 @@ fn main() {
     let display = display_result.unwrap();
     info!("Successfully created window");
 
+    // Init triangle
+    let vertex1 = Vertex { position: [-0.5, -0.5] };
+    let vertex2 = Vertex { position: [ 0.0,  0.5] };
+    let vertex3 = Vertex { position: [ 0.5, -0.5] };
+    let shape = vec![vertex1, vertex2, vertex3];
+    let triangle_vbo = glium::VertexBuffer::new(&display, &shape).unwrap();
+    let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+    let vertex_shader_src = r#"
+        #version 440
+        in vec2 position;
+
+        void main() {
+            gl_Position = vec4(position, 0.0, 1.0);
+        }
+    "#;
+    let frag_shader_src = r#"
+        #version 440
+        out vec4 color;
+        
+        void main() {
+            color = vec4(1.0, 0.0, 0.0, 1.0);
+        }
+    "#;
+    let program = glium::Program::from_source(&display, vertex_shader_src, frag_shader_src, None).unwrap();
+
+
     event_loop.run(move |ev, _, control_flow| {
         let max_fps: u64 = 60;
         let next_frame_time =
@@ -109,6 +142,8 @@ fn main() {
                 // Update and draw here
                 let mut target = display.draw();
                 target.clear_color(0.2, 0.3, 1.0, 1.0);
+                target.draw(&triangle_vbo, &indices, &program, &glium::uniforms::EmptyUniforms,
+            &Default::default()).unwrap();
                 target.finish().unwrap();
             }
             _ => (),
