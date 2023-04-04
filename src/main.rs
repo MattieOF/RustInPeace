@@ -15,7 +15,7 @@ extern crate chrono;
 extern crate glium;
 extern crate simplelog;
 
-use chrono::Local;
+use chrono::{Local, Utc};
 use glium::{
     glutin::{
         self,
@@ -40,10 +40,12 @@ use time::UtcOffset;
 #[derive(Copy, Clone)]
 struct Vertex {
     position: [f32; 2],
+    colour: [f32; 3]
 }
-implement_vertex!(Vertex, position);
+implement_vertex!(Vertex, position location(0), colour location(1));
 
 fn main() {
+    let start_time = Utc::now().timestamp_millis();
     init_log();
 
     info!("Creating window");
@@ -84,30 +86,39 @@ fn main() {
     info!("Successfully created window");
 
     // Init triangle
-    let vertex1 = Vertex { position: [-0.5, -0.5] };
-    let vertex2 = Vertex { position: [ 0.0,  0.5] };
-    let vertex3 = Vertex { position: [ 0.5, -0.5] };
+    let mut triangle_animation_t: f32 = 0.0;
+    let vertex1 = Vertex { position: [-0.5, -0.5], colour: [1.0, 0.0, 0.0] };
+    let vertex2 = Vertex { position: [ 0.0,  0.5], colour: [0.0, 1.0, 0.0] };
+    let vertex3 = Vertex { position: [ 0.5, -0.5], colour: [0.0, 0.0, 1.0] };
     let shape = vec![vertex1, vertex2, vertex3];
     let triangle_vbo = glium::VertexBuffer::new(&display, &shape).unwrap();
     let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
     let vertex_shader_src = r#"
         #version 440
-        in vec2 position;
+        layout(location = 0) in vec2 inPosition;
+        layout(location = 1) in vec3 inColor;
+
+        uniform float t;
+        out vec3 aColor;
 
         void main() {
-            gl_Position = vec4(position, 0.0, 1.0);
+            aColor = inColor;
+            vec2 pos = inPosition;
+            pos.x *= t;
+            pos.y *= t;
+            gl_Position = vec4(pos, 0.0, 1.0);
         }
     "#;
     let frag_shader_src = r#"
         #version 440
         out vec4 color;
+        in vec3 aColor;
         
         void main() {
-            color = vec4(1.0, 0.0, 0.0, 1.0);
+            color = vec4(aColor, 1.0);
         }
     "#;
     let program = glium::Program::from_source(&display, vertex_shader_src, frag_shader_src, None).unwrap();
-
 
     event_loop.run(move |ev, _, control_flow| {
         let max_fps: u64 = 60;
@@ -140,9 +151,11 @@ fn main() {
             },
             glutin::event::Event::MainEventsCleared => {
                 // Update and draw here
+                triangle_animation_t = (((Utc::now().timestamp_millis() - start_time) as f32) / 1000.0).sin();
+
                 let mut target = display.draw();
-                target.clear_color(0.2, 0.3, 1.0, 1.0);
-                target.draw(&triangle_vbo, &indices, &program, &glium::uniforms::EmptyUniforms,
+                target.clear_color(0.1, 0.1, 0.1, 1.0);
+                target.draw(&triangle_vbo, &indices, &program, &uniform! { t: triangle_animation_t },
             &Default::default()).unwrap();
                 target.finish().unwrap();
             }
