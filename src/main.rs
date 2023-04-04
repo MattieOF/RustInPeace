@@ -24,23 +24,20 @@ use glium::{
     },
     Surface,
 };
-use simplelog::{
-    format_description, CombinedLogger, ConfigBuilder, WriteLogger
-};
+use simplelog::{format_description, CombinedLogger, ConfigBuilder, WriteLogger};
 #[cfg(debug_assertions)]
-use simplelog::{
-    ColorChoice, TermLogger, TerminalMode
-};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use std::{
     fs::{self, File},
     process::exit,
 };
 use time::UtcOffset;
+use build_time::build_time_utc;
 
 #[derive(Copy, Clone)]
 struct Vertex {
     position: [f32; 2],
-    colour: [f32; 3]
+    colour: [f32; 3],
 }
 implement_vertex!(Vertex, position location(0), colour location(1));
 
@@ -87,9 +84,18 @@ fn main() {
 
     // Init triangle
     let mut triangle_animation_t: f32 = 0.0;
-    let vertex1 = Vertex { position: [-0.5, -0.5], colour: [1.0, 0.0, 0.0] };
-    let vertex2 = Vertex { position: [ 0.0,  0.5], colour: [0.0, 1.0, 0.0] };
-    let vertex3 = Vertex { position: [ 0.5, -0.5], colour: [0.0, 0.0, 1.0] };
+    let vertex1 = Vertex {
+        position: [-0.5, -0.5],
+        colour: [1.0, 0.0, 0.0],
+    };
+    let vertex2 = Vertex {
+        position: [0.0, 0.5],
+        colour: [0.0, 1.0, 0.0],
+    };
+    let vertex3 = Vertex {
+        position: [0.5, -0.5],
+        colour: [0.0, 0.0, 1.0],
+    };
     let shape = vec![vertex1, vertex2, vertex3];
     let triangle_vbo = glium::VertexBuffer::new(&display, &shape).unwrap();
     let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
@@ -118,7 +124,8 @@ fn main() {
             color = vec4(aColor, 1.0);
         }
     "#;
-    let program = glium::Program::from_source(&display, vertex_shader_src, frag_shader_src, None).unwrap();
+    let program = glium::Program::from_source(&display, vertex_shader_src, frag_shader_src, None)
+        .expect("Failed to compile shader");
 
     event_loop.run(move |ev, _, control_flow| {
         let max_fps: u64 = 60;
@@ -150,14 +157,28 @@ fn main() {
                 _ => return,
             },
             glutin::event::Event::MainEventsCleared => {
+                let frame_start_time = Utc::now().timestamp_micros();
+
                 // Update and draw here
-                triangle_animation_t = (((Utc::now().timestamp_millis() - start_time) as f32) / 1000.0).sin();
+                triangle_animation_t =
+                    (((Utc::now().timestamp_millis() - start_time) as f32) / 700.0).sin();
 
                 let mut target = display.draw();
                 target.clear_color(0.1, 0.1, 0.1, 1.0);
-                target.draw(&triangle_vbo, &indices, &program, &uniform! { t: triangle_animation_t },
-            &Default::default()).unwrap();
-                target.finish().unwrap();
+                target
+                    .draw(
+                        &triangle_vbo,
+                        &indices,
+                        &program,
+                        &uniform! { t: triangle_animation_t },
+                        &Default::default(),
+                    )
+                    .expect("Failed to draw frame");
+                target.finish().expect("Failed to swap buffers");
+
+                let frame_end_time = Utc::now().timestamp_micros();
+                let frame_time_ms = ((frame_end_time - frame_start_time) as f32) / 1000.0;
+                // info!("Frame time: {frame_time_ms}ms");
             }
             _ => (),
         }
@@ -211,4 +232,10 @@ fn init_log() {
         time_now.format("%Y/%m/%d"),
         time_now.format("%H:%M:%S")
     );
+
+    info!("Built at {}", build_time_utc!());
+    #[cfg(debug_assertions)]
+    info!("Debug build - performance will be worse.");
+    #[cfg(not(debug_assertions))]
+    info!("Release build.");
 }
